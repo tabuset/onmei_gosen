@@ -22,10 +22,11 @@
     }
     .animate-shakeNote { animation: shakeNote 1s ease-in-out infinite; }
     
+    /* 風船の横から上に飛び出すように */
     @keyframes popUp {
-      0% { transform: translateY(0) scale(0.5); opacity: 0; }
-      50% { transform: translateY(-30px) scale(1.2); opacity: 1; }
-      100% { transform: translateY(-50px) scale(1); opacity: 0; }
+      0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+      50% { transform: translate(-50%, -30px) scale(1.2); opacity: 1; }
+      100% { transform: translate(-50%, -50px) scale(1); opacity: 0; }
     }
     .animate-popUp { animation: popUp 1.5s ease-out forwards; }
     
@@ -54,7 +55,7 @@
     </div>
     <div class="absolute bottom-0 left-0 right-0 h-8 bg-[#8B4513] border-t-[8px] border-[#654321]"></div>
 
-    <div class="absolute top-4 left-4 flex flex-col gap-2">
+    <div class="absolute top-4 left-4 flex flex-col gap-2 z-50">
       <div class="bg-white px-2 py-1 flex items-center gap-2 rounded shadow-sm border border-gray-200">
         <span class="text-gray-500 text-sm font-bold">ステージ</span>
         <span id="ui-stage" class="bg-blue-500 text-white font-bold px-3 py-0.5 rounded shadow-inner min-w-[4rem] text-center">音域 1</span>
@@ -64,7 +65,7 @@
         <span id="ui-points" class="bg-orange-400 text-white font-bold px-3 py-0.5 rounded shadow-inner min-w-[3rem] text-center transition-colors">1000</span>
       </div>
     </div>
-    <div class="absolute top-4 right-4 bg-white px-3 py-1 flex flex-col items-center rounded shadow-sm border border-gray-200">
+    <div class="absolute top-4 right-4 bg-white px-3 py-1 flex flex-col items-center rounded shadow-sm border border-gray-200 z-50">
       <span class="text-gray-500 text-sm font-bold">現在のスコア</span>
       <span id="ui-score" class="bg-orange-400 text-white font-bold px-4 py-0.5 rounded shadow-inner mt-1 min-w-[5rem] text-center text-lg">0</span>
     </div>
@@ -100,16 +101,17 @@
       </div>
     </div>
 
-    <div id="staff-container" class="absolute top-[20%] left-0 right-0 h-32 z-40 hidden flex justify-center items-center pointer-events-none transition-all duration-500">
-      <div id="target-note-text" class="text-5xl sm:text-6xl md:text-7xl whitespace-nowrap font-black text-gray-800 bg-white/95 px-8 py-4 rounded-3xl shadow-[0_8px_0_rgba(0,0,0,0.2)] border-4 border-gray-300 transition-all duration-300 scale-90 opacity-0">
-        ?
-      </div>
-      <div id="ui-added-score" class="absolute top-0 right-[25%] bg-white border-2 border-gray-200 rounded-[50%] px-4 py-2 font-bold text-gray-700 shadow-md z-30 hidden">
-        +0
+    <div id="staff-container" class="absolute top-[20%] left-0 right-0 h-32 z-40 hidden flex justify-center items-start pt-2 pointer-events-none transition-all duration-500">
+      <div id="target-note-wrapper" class="bg-white/95 px-8 py-4 rounded-3xl shadow-[0_8px_0_rgba(0,0,0,0.2)] border-4 border-gray-300 transition-all duration-300 scale-90 opacity-0 relative">
+        <span id="target-note-text" class="text-5xl sm:text-6xl md:text-7xl whitespace-nowrap font-black text-gray-800">?</span>
       </div>
     </div>
 
-    <div id="balloons-container" class="absolute bottom-2 left-0 w-full flex flex-col items-center justify-end px-2 pointer-events-none z-20 overflow-visible gap-2">
+    <div id="ui-added-score" class="absolute bg-white border-2 border-orange-300 rounded-full px-4 py-1 font-black text-orange-500 shadow-md z-[100] hidden text-xl pointer-events-none">
+      +0
+    </div>
+
+    <div id="balloons-container" class="absolute bottom-1 left-0 w-full flex flex-col items-center justify-end px-2 pointer-events-none z-20 overflow-visible" style="gap: 0px;">
       </div>
 
     <div id="overlay-title" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#a6e6ff] overflow-y-auto pt-20 pb-10">
@@ -542,28 +544,54 @@
       document.getElementById('ui-score').innerText = score;
     }
 
-    function showAddedScore(points) {
+    // 正解した風船の横からポイントの吹き出しを表示させる関数
+    function showAddedScore(points, balloonId) {
       const el = document.getElementById('ui-added-score');
+      const balloon = document.getElementById(balloonId);
+      
+      if (balloon) {
+        const rect = balloon.getBoundingClientRect();
+        const appRect = document.getElementById('game-app').getBoundingClientRect();
+        
+        // 風船の中心X座標
+        const centerX = rect.left - appRect.left + rect.width / 2;
+        // 少し横にずらして表示（基本は右側）
+        let x = centerX + 60;
+        // 画面右端に近い場合は左側にずらす
+        if (centerX > appRect.width - 80) {
+          x = centerX - 60;
+        }
+        
+        // Y座標は風船の少し上あたり
+        const y = rect.top - appRect.top + 20;
+        
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+      }
+
       el.innerText = '+' + points;
       el.classList.remove('hidden', 'animate-popUp');
       void el.offsetWidth;
       el.classList.add('animate-popUp');
+      
       setTimeout(() => {
         el.classList.add('hidden');
       }, 1500);
     }
 
     function renderStaffNote(note) {
+      const wrapperEl = document.getElementById('target-note-wrapper');
       const textEl = document.getElementById('target-note-text');
       if (!note) {
         textEl.innerText = '?';
-        textEl.classList.remove('scale-100', 'opacity-100');
-        textEl.classList.add('scale-90', 'opacity-0');
+        wrapperEl.classList.remove('scale-100', 'opacity-100');
+        wrapperEl.classList.add('scale-90', 'opacity-0');
         return;
       }
       textEl.innerText = note.label;
-      textEl.classList.remove('scale-90', 'opacity-0');
-      textEl.classList.add('scale-100', 'opacity-100');
+
+      wrapperEl.classList.remove('scale-90', 'opacity-0');
+      wrapperEl.classList.add('scale-100', 'opacity-100');
     }
 
     function generateBalloons(stageNotes) {
@@ -594,19 +622,26 @@
       // 2. 高い音のグループが画面の上に、低い音のグループが下になるように並び順を反転
       rows.reverse();
       
-      // 3. 段数や数に応じて全体のスケールと出題テキスト(staff-container)の位置を調整
+      // 3. 段数や数に応じて全体のスケールと出題テキストの位置を調整
       let scale = 1;
       let staffTop = '20%'; // 出題テキストの基本位置
+      let textScale = 1;
+      let mt = 0; // 段間マージン
       
       if (rows.length >= 3) {
-        scale = 0.6;
-        staffTop = '5%';
+        scale = 0.45;
+        staffTop = '2%';
+        textScale = 0.65;
+        mt = -45;
       } else if (rows.length === 2) {
+        scale = 0.65;
+        staffTop = '5%';
+        textScale = 0.8;
+        mt = -30;
+      } else if (rows[0].length >= 8) {
         scale = 0.8;
         staffTop = '10%';
-      } else if (rows[0].length >= 8) {
-        scale = 0.85;
-        staffTop = '15%';
+        textScale = 0.9;
       } else if (rows[0].length >= 6) {
         scale = 0.95;
         staffTop = '15%';
@@ -614,13 +649,27 @@
       
       if (staffContainer) {
         staffContainer.style.top = staffTop;
+        staffContainer.style.transform = `scale(${textScale})`;
+        staffContainer.style.transformOrigin = 'top center';
+      }
+      
+      // 画面幅をはみ出さないように動的にスケールを再計算
+      const maxNotesInRow = Math.max(...rows.map(r => r.length));
+      let ml = 0;
+      if (maxNotesInRow >= 7) ml = -15;
+      else if (maxNotesInRow >= 5) ml = -5;
+
+      const containerWidth = container.clientWidth || window.innerWidth;
+      const baseWidth = 112; 
+      const estimatedWidth = baseWidth + (baseWidth + ml) * (maxNotesInRow - 1);
+      const scaledWidth = estimatedWidth * scale;
+      
+      // 画面幅の95%に収まるようにスケールを縮小
+      if (scaledWidth > containerWidth * 0.95) {
+        scale = scale * ((containerWidth * 0.95) / scaledWidth);
       }
       
       const balloonsHtml = rows.map((rowNotes, rowIndex) => {
-        // 段の中の音符同士の重なり（マージン）を調整
-        let ml = 0;
-        if (rowNotes.length >= 7) ml = -15;
-        else if (rowNotes.length >= 5) ml = -5;
 
         const rowHtml = rowNotes.map((note, index) => {
           let linesHtml = '';
@@ -676,8 +725,8 @@
                 </svg>
                 <div class="absolute top-2 left-3 w-5 h-7 bg-white/50 rounded-full transform rotate-45 z-10 pointer-events-none"></div>
               </div>
-              <div class="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] shrink-0 opacity-90" style="border-bottom-color: ${note.color};"></div>
-              <div class="w-1 h-14 border-l-2 border-gray-600/60 -mt-1 rounded-bl-full shrink-0"></div>
+              <div class="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] shrink-0 opacity-90 pointer-events-none" style="border-bottom-color: ${note.color};"></div>
+              <div class="w-1 h-14 border-l-2 border-gray-600/60 -mt-1 rounded-bl-full shrink-0 pointer-events-none"></div>
             </div>
 
           </div>
@@ -685,16 +734,13 @@
 
         // 段ごとのコンテナ
         return `
-          <div class="w-full flex flex-nowrap justify-center items-end relative shrink-0" style="transform: scale(${scale}); transform-origin: bottom center; margin-top: ${rows.length > 1 ? '-20px' : '0'}; z-index: ${30 - rowIndex};">
+          <div class="w-full flex flex-nowrap justify-center items-end relative shrink-0" style="transform: scale(${scale}); transform-origin: bottom center; margin-top: ${rows.length > 1 && rowIndex > 0 ? mt + 'px' : '0'}; z-index: ${30 - rowIndex};">
             ${rowHtml}
           </div>
         `;
       }).join('');
 
       container.innerHTML = balloonsHtml;
-      
-      // 親コンテナも flex-col で縦に並べる
-      container.className = "absolute bottom-2 left-0 w-full flex flex-col items-center justify-end px-2 pointer-events-none z-20 overflow-visible gap-4";
     }
 
     function updateBalloonsState(status, correctNoteId) {
@@ -853,13 +899,16 @@
       if (isCorrect) {
         const randomX = Math.floor(Math.random() * 300) - 150;
         const b = document.getElementById(`balloon-${noteId}`);
+        
+        // 吹き出しを風船の位置から表示させる
+        showAddedScore(actualPoints, `balloon-${noteId}`);
+
         b.style.setProperty('--fly-x', `${randomX}px`);
         b.style.setProperty('--fly-rot', `${randomX * 0.15}deg`);
 
         playCorrectSound(ALL_NOTES[noteId]);
         state.score += actualPoints;
         updateScore(state.score);
-        showAddedScore(actualPoints);
         setCatMessage('正解！', true, false);
       } else {
         playWrongSound();
