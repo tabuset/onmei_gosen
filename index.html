@@ -22,6 +22,7 @@
     }
     .animate-shakeNote { animation: shakeNote 1s ease-in-out infinite; }
     
+    /* 風船の横から上に飛び出すように */
     @keyframes popUp {
       0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
       50% { transform: translate(-50%, -30px) scale(1.2); opacity: 1; }
@@ -102,6 +103,12 @@
         <div class="absolute -bottom-[10px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px] border-t-gray-300"></div>
         <div class="absolute -bottom-[7px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white"></div>
       </div>
+    </div>
+
+    <div id="intro-start-container" class="absolute top-[28%] left-0 w-full flex justify-center z-50 pointer-events-none hidden">
+      <button onclick="finishIntroFromButton()" class="py-4 px-12 bg-orange-500 hover:bg-orange-400 text-white text-3xl font-bold rounded-full shadow-[0_6px_0_#c2410c] active:translate-y-[6px] active:shadow-none transition-all pointer-events-auto animate-pulse">
+        スタート！
+      </button>
     </div>
 
     <div id="staff-container" class="absolute top-[20%] left-0 right-0 h-32 z-40 hidden flex justify-center items-start pt-2 pointer-events-none transition-all duration-500">
@@ -423,6 +430,7 @@
       document.getElementById('stage-select-range').classList.add('hidden');
       document.getElementById('stage-select-challenge').classList.add('hidden');
       document.getElementById('overlay-pause').classList.add('hidden');
+      document.getElementById('intro-start-container').classList.add('hidden');
       
       if (state.playerName) {
         document.getElementById('player-name-display').classList.remove('hidden');
@@ -929,58 +937,45 @@
       state.gameState = 'intro';
       let i = 0;
       
-      setCatMessage('今回の音だよ！\n（画面クリックでスキップ）');
+      setCatMessage('位置を確認してね！\n（画面クリックでスキップ）');
       const app = document.getElementById('game-app');
+      const startBtnContainer = document.getElementById('intro-start-container');
       
+      // スキップ処理
       const skipIntro = (e) => {
-        // ボタン等のクリックはスキップ判定から除外
+        // ボタン類がクリックされたら無視
         if (e && e.target.closest('button')) return;
         if (state.gameState !== 'intro' || isPaused) return;
+        
         if (introTimerId) clearTimeout(introTimerId);
         app.removeEventListener('click', skipIntro);
-        finishIntro();
+        
+        // 全てのラベルを強制表示
+        targetNotes.forEach(note => {
+          const balloon = document.getElementById(`balloon-${note.id}`);
+          if (balloon) {
+            const label = balloon.querySelector('.intro-label');
+            if (label) {
+              label.classList.remove('opacity-0', 'scale-90');
+              label.classList.add('opacity-100', 'scale-100', '-translate-y-2');
+            }
+          }
+        });
+        showStartButton();
       };
+      
+      // 最初はスキップイベントを登録
       app.addEventListener('click', skipIntro);
 
-      function nextNote() {
-        if (state.gameState !== 'intro') return;
-        
-        // ポーズ中は待機
-        if (isPaused) {
-          introTimerId = setTimeout(nextNote, 100);
-          return;
-        }
-        
-        if (i >= targetNotes.length) {
-          introTimerId = setTimeout(() => {
-            app.removeEventListener('click', skipIntro);
-            finishIntro();
-          }, 800);
-          return;
-        }
-        
-        const note = targetNotes[i];
-        const balloon = document.getElementById(`balloon-${note.id}`);
-        if (balloon) {
-          const label = balloon.querySelector('.intro-label');
-          if (label) {
-            label.classList.remove('opacity-0', 'scale-90');
-            label.classList.add('opacity-100', 'scale-100', '-translate-y-2');
-          }
-          balloon.classList.add('brightness-125');
-          playCorrectSound(note); // 音名読み上げ
-          
-          setTimeout(() => {
-            if (balloon) balloon.classList.remove('brightness-125');
-          }, 500);
-        }
-        
-        i++;
-        introTimerId = setTimeout(nextNote, 800);
+      function showStartButton() {
+        setCatMessage('準備ができたら\nスタートを押してね！');
+        startBtnContainer.classList.remove('hidden');
       }
-      
-      function finishIntro() {
-        if (state.gameState !== 'intro') return;
+
+      // スタートボタンを押したときの処理
+      window.finishIntroFromButton = function() {
+        startBtnContainer.classList.add('hidden');
+        app.removeEventListener('click', skipIntro);
         
         // 全てのラベルを隠す
         document.querySelectorAll('.intro-label').forEach(el => {
@@ -1007,13 +1002,49 @@
           if(rAF_TimerId) cancelAnimationFrame(rAF_TimerId);
           updatePointsDisplay();
         }, 1000);
+      };
+
+      // 順番に音を光らせる処理
+      function nextNote() {
+        if (state.gameState !== 'intro') return;
+        
+        // ポーズ中は待機
+        if (isPaused) {
+          introTimerId = setTimeout(nextNote, 100);
+          return;
+        }
+        
+        if (i >= targetNotes.length) {
+          app.removeEventListener('click', skipIntro);
+          showStartButton();
+          return;
+        }
+        
+        const note = targetNotes[i];
+        const balloon = document.getElementById(`balloon-${note.id}`);
+        if (balloon) {
+          const label = balloon.querySelector('.intro-label');
+          if (label) {
+            label.classList.remove('opacity-0', 'scale-90');
+            label.classList.add('opacity-100', 'scale-100', '-translate-y-2');
+          }
+          balloon.classList.add('brightness-125');
+          
+          setTimeout(() => {
+            if (balloon) balloon.classList.remove('brightness-125');
+          }, 400);
+        }
+        
+        i++;
+        introTimerId = setTimeout(nextNote, 600);
       }
 
-      // 少し待ってから最初の音を鳴らす
+      // 少し待ってから最初の音の紹介を開始
       introTimerId = setTimeout(nextNote, 500);
     }
 
     // === ゲームロジック ===
+    
     function generateQuestions(mode, stage) {
       const stageNotesArr = mode === 'range' ? RANGE_STAGES[stage - 1] : CHALLENGE_STAGES[stage - 1];
       const targetNotes = stageNotesArr.map(id => ALL_NOTES[id]);
@@ -1103,7 +1134,7 @@
       state.stage = targetStage;
       state.score = 0;
       state.questionCount = 1;
-      state.gameState = 'intro';
+      state.gameState = 'intro'; // イントロから開始
       state.feedback = null;
       state.showNote = false;
       isPaused = false;
