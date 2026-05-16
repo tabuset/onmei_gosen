@@ -22,6 +22,7 @@
     }
     .animate-shakeNote { animation: shakeNote 1s ease-in-out infinite; }
     
+    /* 風船の横から上に飛び出すように */
     @keyframes popUp {
       0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
       50% { transform: translate(-50%, -30px) scale(1.2); opacity: 1; }
@@ -63,6 +64,7 @@
         <span class="text-gray-500 text-sm font-bold">ポイント</span>
         <span id="ui-points" class="bg-orange-400 text-white font-bold px-3 py-0.5 rounded shadow-inner min-w-[3rem] text-center transition-colors">1000</span>
       </div>
+      <button onclick="restartStage()" class="bg-gray-500 hover:bg-gray-400 text-white font-bold px-2 py-1 rounded shadow-sm text-sm transition-all text-center border border-gray-600 active:translate-y-[2px]">やり直し</button>
     </div>
     <div class="absolute top-4 right-4 bg-white px-3 py-1 flex flex-col items-center rounded shadow-sm border border-gray-200 z-50">
       <span class="text-gray-500 text-sm font-bold">現在のスコア</span>
@@ -120,6 +122,8 @@
         <span id="player-name-text" class="text-blue-600 font-black text-lg"></span>
       </div>
 
+      <button onclick="clearData()" class="absolute bottom-4 right-4 text-xs text-blue-800 hover:text-red-600 underline bg-transparent border-none z-50 cursor-pointer">データクリア</button>
+
       <div class="flex items-center justify-center gap-2 mb-10 shrink-0 mt-16">
         <div class="transform -rotate-6 animate-bounce">
           <svg width="80" height="96" viewBox="0 0 120 150">
@@ -156,7 +160,7 @@
           音域モード
           <span class="block text-sm font-normal mt-2 opacity-90">決まった音域を練習しよう！（全5ステージ）</span>
         </button>
-        <button id="btn-mode-challenge" onclick="handleModeSelect('challenge')" class="py-5 px-6 bg-orange-500 hover:bg-orange-400 text-white text-3xl font-bold rounded-2xl shadow-[0_8px_0_#c2410c] active:translate-y-[8px] active:shadow-none transition-all">
+        <button onclick="handleModeSelect('challenge')" class="py-5 px-6 bg-orange-500 hover:bg-orange-400 text-white text-3xl font-bold rounded-2xl shadow-[0_8px_0_#c2410c] active:translate-y-[8px] active:shadow-none transition-all">
           チャレンジモード
           <span class="block text-sm font-normal mt-2 opacity-90">徐々に増える音に挑戦！（全12ステージ）</span>
         </button>
@@ -258,81 +262,77 @@
       feedback: null,
       questionList: [],
       startTime: null,
-      maxUnlockedRange: 1,      // 音域モードの進捗
-      maxUnlockedChallenge: 1,  // チャレンジモードの進捗
-      playerName: ''            // プレイヤー名
+      maxUnlockedChallenge: 1,
+      playerName: '',
+      scores: {
+        range: Array(5).fill(0),
+        challenge: Array(12).fill(0)
+      }
     };
 
     let audioCtx = null;
     let bgmTimerId = null;
     let rAF_TimerId = null;
 
-    // === セーブデータ管理（音名⇒五線専用のキーを使用） ===
+    // === セーブデータ管理（新しいオリジナルキーを使用） ===
     function loadProgress() {
       try {
-        const savedRange = localStorage.getItem('name2staff-range-progress');
-        if (savedRange) state.maxUnlockedRange = parseInt(savedRange, 10);
-
-        const savedChallenge = localStorage.getItem('name2staff-challenge-progress');
-        if (savedChallenge) state.maxUnlockedChallenge = parseInt(savedChallenge, 10);
-        
-        const savedName = localStorage.getItem('name2staff-player-name');
-        if (savedName) state.playerName = savedName;
-
+        const data = JSON.parse(localStorage.getItem('name2staff_v3_data'));
+        if (data) {
+          state.maxUnlockedChallenge = data.maxUnlockedChallenge || 1;
+          state.playerName = data.playerName || '';
+          if (data.scores) {
+            state.scores.range = data.scores.range || Array(5).fill(0);
+            state.scores.challenge = data.scores.challenge || Array(12).fill(0);
+          }
+        }
       } catch (e) {
         console.warn("セーブデータの読み込みに失敗しました", e);
       }
     }
 
-    function saveProgress(mode, unlockedStage) {
+    function saveProgress() {
       try {
-        if (mode === 'range') {
-          if (unlockedStage > state.maxUnlockedRange && unlockedStage <= 6) {
-            state.maxUnlockedRange = unlockedStage;
-            localStorage.setItem('name2staff-range-progress', state.maxUnlockedRange.toString());
-          }
-        } else if (mode === 'challenge') {
-          if (unlockedStage > state.maxUnlockedChallenge && unlockedStage <= 12) {
-            state.maxUnlockedChallenge = unlockedStage;
-            localStorage.setItem('name2staff-challenge-progress', state.maxUnlockedChallenge.toString());
-          }
-        }
-      } catch (e) {
-        console.warn("セーブデータの保存に失敗しました", e);
+        localStorage.setItem('name2staff_v3_data', JSON.stringify({
+          maxUnlockedChallenge: state.maxUnlockedChallenge,
+          playerName: state.playerName,
+          scores: state.scores
+        }));
+      } catch (e) {}
+    }
+
+    window.clearData = function() {
+      if (confirm("なまえやゲームの記録をすべて消去しますか？")) {
+        localStorage.removeItem('name2staff_v3_data');
+        state.maxUnlockedChallenge = 1;
+        state.playerName = '';
+        state.scores = { range: Array(5).fill(0), challenge: Array(12).fill(0) };
+        showTitleScreen();
       }
     }
 
     // === 初期化とタイトル画面 ===
     function initStageSelectUI() {
-      // チャレンジモードの解放条件チェック (音域モード全5ステージクリアで解放)
-      const challengeBtn = document.getElementById('btn-mode-challenge');
-      if (state.maxUnlockedRange > 5) {
-        challengeBtn.className = "py-5 px-6 bg-orange-500 hover:bg-orange-400 text-white text-3xl font-bold rounded-2xl shadow-[0_8px_0_#c2410c] active:translate-y-[8px] active:shadow-none transition-all";
-        challengeBtn.innerHTML = `チャレンジモード<span class="block text-sm font-normal mt-2 opacity-90">徐々に増える音に挑戦！（全12ステージ）</span>`;
-      } else {
-        challengeBtn.className = "py-5 px-6 bg-gray-400 text-white text-3xl font-bold rounded-2xl shadow-[0_8px_0_#4b5563] cursor-not-allowed transition-all opacity-80";
-        challengeBtn.innerHTML = `🔒 チャレンジモード<span class="block text-sm font-normal mt-2 opacity-90">音域モードを全てクリアすると解放されます</span>`;
-      }
-
       const rangeContainer = document.getElementById('stage-btns-range');
       let rangeHtml = '';
       for (let i = 1; i <= 5; i++) {
         const label = RANGE_STAGES[i-1].map(id => ALL_NOTES[id].label).join(' ');
-        if (i <= state.maxUnlockedRange) {
-          rangeHtml += `
-            <button onclick="startGame('range', ${i})" class="bg-white hover:bg-blue-50 text-blue-600 rounded-xl shadow-[0_4px_0_#93c5fd] border-2 border-blue-200 active:translate-y-[4px] active:shadow-none transition-all flex flex-col items-center justify-center py-2 px-1">
-              <span class="text-lg font-bold">ステージ ${i}</span>
-              <span class="text-xs text-gray-500 mt-1 text-center">${label}</span>
-            </button>
-          `;
-        } else {
-          rangeHtml += `
-            <div class="bg-gray-200 text-gray-400 rounded-xl border-2 border-gray-300 flex flex-col items-center justify-center py-2 px-1 overflow-hidden opacity-80 cursor-not-allowed">
-              <span class="text-base font-bold">🔒 ステージ ${i}</span>
-              <span class="text-xs mt-1 break-words text-center leading-tight px-1">クリアで解放</span>
-            </div>
-          `;
+        
+        let markHtml = '';
+        const score = state.scores.range[i-1];
+        if (score >= 9000) {
+          markHtml = `<span class="text-pink-500 font-black text-xl absolute top-1 right-2 drop-shadow-sm">◎</span>`;
+        } else if (score >= 8000) {
+          markHtml = `<span class="text-red-500 font-black text-xl absolute top-1 right-2 drop-shadow-sm">〇</span>`;
         }
+
+        rangeHtml += `
+          <button onclick="startGame('range', ${i})" class="relative bg-white hover:bg-blue-50 text-blue-600 rounded-xl shadow-[0_4px_0_#93c5fd] border-2 border-blue-200 active:translate-y-[4px] active:shadow-none transition-all flex flex-col items-center justify-center py-2 px-1">
+            ${markHtml}
+            <span class="text-lg font-bold">ステージ ${i}</span>
+            <span class="text-xs text-gray-500 mt-1 text-center">${label}</span>
+          </button>
+        `;
       }
       rangeContainer.innerHTML = rangeHtml;
 
@@ -342,16 +342,25 @@
         const label = CHALLENGE_STAGES[i-1].map(id => ALL_NOTES[id].label).join(' ');
         const textClass = label.length > 20 ? "text-[9px]" : "text-[10px]";
         
+        let markHtml = '';
+        const score = state.scores.challenge[i-1];
+        if (score >= 9000) {
+          markHtml = `<span class="text-pink-500 font-black text-xl absolute top-1 right-2 drop-shadow-sm">◎</span>`;
+        } else if (score >= 8000) {
+          markHtml = `<span class="text-red-500 font-black text-xl absolute top-1 right-2 drop-shadow-sm">〇</span>`;
+        }
+
         if (i <= state.maxUnlockedChallenge) {
           challengeHtml += `
-            <button onclick="startGame('challenge', ${i})" class="bg-white hover:bg-orange-50 text-orange-600 rounded-xl shadow-[0_4px_0_#fdba74] border-2 border-orange-200 active:translate-y-[4px] active:shadow-none transition-all flex flex-col items-center justify-center py-2 px-1 overflow-hidden">
+            <button onclick="startGame('challenge', ${i})" class="relative bg-white hover:bg-orange-50 text-orange-600 rounded-xl shadow-[0_4px_0_#fdba74] border-2 border-orange-200 active:translate-y-[4px] active:shadow-none transition-all flex flex-col items-center justify-center py-2 px-1 overflow-hidden">
+              ${markHtml}
               <span class="text-base font-bold">Ch. ${i}</span>
               <span class="${textClass} text-gray-500 mt-1 break-words text-center leading-tight px-1">${label}</span>
             </button>
           `;
         } else {
           challengeHtml += `
-            <div class="bg-gray-200 text-gray-400 rounded-xl border-2 border-gray-300 flex flex-col items-center justify-center py-2 px-1 overflow-hidden opacity-80 cursor-not-allowed">
+            <div class="relative bg-gray-200 text-gray-400 rounded-xl border-2 border-gray-300 flex flex-col items-center justify-center py-2 px-1 overflow-hidden opacity-80 cursor-not-allowed">
               <span class="text-base font-bold">🔒 Ch. ${i}</span>
               <span class="${textClass} mt-1 break-words text-center leading-tight px-1">クリアで解放</span>
             </div>
@@ -366,23 +375,20 @@
       const input = document.getElementById('player-name-input').value.trim();
       if (input) {
         state.playerName = input;
-        try {
-          localStorage.setItem('name2staff-player-name', state.playerName);
-        } catch(e){}
+        saveProgress();
         document.getElementById('overlay-name-input').classList.add('hidden');
-        showStageSelect('range');
+        showStageSelect(state.mode); // 入力時に選択していたモードへ進む
       } else {
         alert("なまえを入力してね！");
       }
     }
 
     window.handleModeSelect = function(mode) {
-      if (mode === 'range' && !state.playerName) {
-        // 音域モード初回プレイ時は名前入力を促す
+      state.mode = mode;
+      if (!state.playerName) {
+        // 初回プレイ時は名前入力を促す
         document.getElementById('overlay-name-input').classList.remove('hidden');
         document.getElementById('player-name-input').focus();
-      } else if (mode === 'challenge' && state.maxUnlockedRange <= 5) {
-        // ロック中は何もしない
       } else {
         showStageSelect(mode);
       }
@@ -398,7 +404,13 @@
       document.getElementById('mode-select').classList.remove('hidden');
       document.getElementById('stage-select-range').classList.add('hidden');
       document.getElementById('stage-select-challenge').classList.add('hidden');
-      document.getElementById('player-name-display').classList.add('hidden');
+      
+      if (state.playerName) {
+        document.getElementById('player-name-display').classList.remove('hidden');
+        document.getElementById('player-name-text').innerText = state.playerName;
+      } else {
+        document.getElementById('player-name-display').classList.add('hidden');
+      }
 
       document.getElementById('overlay-result').classList.add('hidden');
       document.getElementById('overlay-allclear').classList.add('hidden');
@@ -417,11 +429,6 @@
       } else {
         document.getElementById('stage-select-challenge').classList.remove('hidden');
         document.getElementById('stage-select-range').classList.add('hidden');
-      }
-
-      if (state.playerName) {
-        document.getElementById('player-name-display').classList.remove('hidden');
-        document.getElementById('player-name-text').innerText = state.playerName;
       }
     }
 
@@ -975,6 +982,13 @@
       }, 1000);
     }
 
+    // やり直しボタンの処理
+    window.restartStage = function() {
+      if (state.gameState === 'playing') {
+        startGame(state.mode, state.stage);
+      }
+    }
+
     window.handleGuess = function(noteId) {
       if (state.gameState !== 'playing' || state.feedback !== null || !state.showNote) return;
       
@@ -1061,6 +1075,21 @@
       const clearScore = 8000;
       const superScore = 9000;
       
+      // 今回のスコアが過去の最高スコアを上回っていれば更新
+      if (state.score > state.scores[state.mode][state.stage - 1]) {
+        state.scores[state.mode][state.stage - 1] = state.score;
+      }
+      
+      // クリア時の解放処理
+      if (state.score >= clearScore) {
+        if (state.mode === 'challenge') {
+          if (state.stage + 1 > state.maxUnlockedChallenge && state.stage < 12) {
+            state.maxUnlockedChallenge = state.stage + 1;
+          }
+        }
+      }
+      saveProgress();
+
       const modeName = state.mode === 'range' ? '音域モード' : 'チャレンジモード';
       let html = `
         <h2 class="text-2xl md:text-3xl font-black text-gray-800 mb-2">${modeName}<br/>ステージ ${state.stage} 終了！</h2>
@@ -1068,8 +1097,6 @@
       `;
       
       if (state.score >= clearScore) {
-        saveProgress(state.mode, state.stage + 1);
-
         let btnColor = '';
         if (state.score >= superScore) {
           playSuperFanfare();
@@ -1080,21 +1107,24 @@
           elConfetti.classList.remove('hidden');
           
           html += `<p class="text-2xl font-black text-yellow-500 mb-6 animate-pulse">大・大・大成功！！<br/>パーフェクト級だね！</p>`;
-          btnColor = 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600 shadow-[0_4px_0_#ca8a04] active:translate-y-[4px] active:shadow-none';
+          btnColor = 'bg-yellow-400 hover:bg-yellow-500 border-b-4 border-yellow-600 shadow-[0_4px_0_#ca8a04]';
         } else {
           playFanfare();
           elConfetti.classList.add('hidden');
           html += `<p class="text-xl font-bold text-green-500 mb-6">目標の${clearScore}点達成！<br/>おめでとう！</p>`;
-          btnColor = 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 shadow-[0_4px_0_#15803d] active:translate-y-[4px] active:shadow-none';
+          btnColor = 'bg-green-500 hover:bg-green-600 border-b-4 border-green-700 shadow-[0_4px_0_#15803d]';
         }
 
-        if (state.mode === 'range') {
-          const btnText = state.stage < 5 ? '次のステージへ！' : 'モード選択へ戻る';
-          html += `<button class="w-full py-4 ${btnColor} text-white text-2xl font-bold rounded-xl transition-all" onclick="handleNextStage()">${btnText}</button>`;
-        } else {
-          const btnText = state.stage < 12 ? '次のステージへ！' : 'エンディングへ！';
-          html += `<button class="w-full py-4 ${btnColor} text-white text-2xl font-bold rounded-xl transition-all" onclick="handleNextStage()">${btnText}</button>`;
-        }
+        const btnNextText = (state.mode === 'challenge' && state.stage === 12) ? 'エンディングへ！' : '次のステージへ！';
+        const nextAction = (state.mode === 'challenge' && state.stage === 12) ? 'showAllClearScreen()' : 'handleNextStage()';
+
+        html += `
+          <div class="flex flex-col gap-3">
+            <button class="w-full py-4 ${btnColor} text-white text-2xl font-bold rounded-xl active:translate-y-[4px] active:shadow-none transition-all" onclick="${nextAction}">${btnNextText}</button>
+            <button class="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white text-xl font-bold rounded-xl shadow-[0_4px_0_#1d4ed8] active:translate-y-[4px] active:shadow-none transition-all" onclick="startGame('${state.mode}', ${state.stage})">もういちどプレイ</button>
+            <button class="w-full py-3 bg-gray-400 hover:bg-gray-500 text-white text-xl font-bold rounded-xl shadow-[0_4px_0_#4b5563] active:translate-y-[4px] active:shadow-none transition-all" onclick="showTitleScreen()">ステージ選択へ戻る</button>
+          </div>
+        `;
 
       } else {
         playFailSound();
@@ -1103,7 +1133,7 @@
           <p class="text-lg font-bold text-red-500 mb-6">${clearScore}点に届かなかった...<br/>もう一度挑戦しよう！</p>
           <div class="flex flex-col gap-3">
             <button class="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white text-2xl font-bold rounded-xl shadow-[0_4px_0_#1d4ed8] active:translate-y-[4px] active:shadow-none transition-all" onclick="startGame('${state.mode}', ${state.stage})">もういちど挑戦する</button>
-            <button class="w-full py-3 bg-gray-400 hover:bg-gray-500 text-white text-xl font-bold rounded-xl shadow-[0_4px_0_#4b5563] active:translate-y-[4px] active:shadow-none transition-all" onclick="showTitleScreen()">タイトルへ戻る</button>
+            <button class="w-full py-3 bg-gray-400 hover:bg-gray-500 text-white text-xl font-bold rounded-xl shadow-[0_4px_0_#4b5563] active:translate-y-[4px] active:shadow-none transition-all" onclick="showTitleScreen()">ステージ選択へ戻る</button>
           </div>
         `;
       }
@@ -1115,7 +1145,7 @@
         if (state.stage < 5) {
           startGame('range', state.stage + 1);
         } else {
-          showTitleScreen(); // 音域モード全てクリア後はタイトル（ステージ選択）へ
+          showTitleScreen(); // 音域モードすべてクリア後は選択画面へ
         }
       } else if (state.mode === 'challenge') {
         if (state.stage < 12) {
