@@ -299,7 +299,7 @@
     let pauseTime = 0;
     let introTimerId = null;
 
-    // === セーブデータ管理（新しいオリジナルキーを使用） ===
+    // === セーブデータ管理 ===
     function loadProgress() {
       try {
         const data = JSON.parse(localStorage.getItem('name2staff_v3_data'));
@@ -395,14 +395,13 @@
       challengeContainer.innerHTML = challengeHtml;
     }
 
-    // プレイヤー名の登録
     window.savePlayerName = function() {
       const input = document.getElementById('player-name-input').value.trim();
       if (input) {
         state.playerName = input;
         saveProgress();
         document.getElementById('overlay-name-input').classList.add('hidden');
-        showStageSelect(state.mode); // 入力時に選択していたモードへ進む
+        showStageSelect(state.mode);
       } else {
         alert("なまえを入力してね！");
       }
@@ -411,7 +410,6 @@
     window.handleModeSelect = function(mode) {
       state.mode = mode;
       if (!state.playerName) {
-        // 初回プレイ時は名前入力を促す
         document.getElementById('overlay-name-input').classList.remove('hidden');
         document.getElementById('player-name-input').focus();
       } else {
@@ -464,7 +462,6 @@
       initStageSelectUI();
       showTitleScreen();
 
-      // Enterキーで名前登録
       document.getElementById('player-name-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
           savePlayerName();
@@ -573,10 +570,12 @@
       osc.stop(audioCtx.currentTime + 0.5);
     }
 
-    function playCorrectSound(note) {
+    // ピアノ音と読み上げを鳴らす共通処理
+    function playNoteAudioAndSpeech(note) {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
-      
+
+      // 1. 読み上げ音声 (日本語)
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(note.label + 'ー');
@@ -586,6 +585,7 @@
         window.speechSynthesis.speak(utterance);
       }
 
+      // 2. ピアノの単音風サウンド（サイン波）
       const oscNote = audioCtx.createOscillator();
       const gainNote = audioCtx.createGain();
       oscNote.type = 'sine';
@@ -596,7 +596,16 @@
       gainNote.connect(audioCtx.destination);
       oscNote.start(now);
       oscNote.stop(now + 0.6);
+    }
 
+    function playCorrectSound(note) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      
+      // 読み上げとピアノ音
+      playNoteAudioAndSpeech(note);
+
+      // 正解時のピコーンというコイン音を追加
       const oscCoin = audioCtx.createOscillator();
       const gainCoin = audioCtx.createGain();
       oscCoin.type = 'square';
@@ -704,7 +713,6 @@
       document.getElementById('ui-score').innerText = score;
     }
 
-    // 正解した風船の横からポイントの吹き出しを表示させる関数
     function showAddedScore(points, balloonId) {
       const el = document.getElementById('ui-added-score');
       const balloon = document.getElementById(balloonId);
@@ -713,16 +721,11 @@
         const rect = balloon.getBoundingClientRect();
         const appRect = document.getElementById('game-app').getBoundingClientRect();
         
-        // 風船の中心X座標
         const centerX = rect.left - appRect.left + rect.width / 2;
-        // 少し横にずらして表示（基本は右側）
         let x = centerX + 60;
-        // 画面右端に近い場合は左側にずらす
         if (centerX > appRect.width - 80) {
           x = centerX - 60;
         }
-        
-        // Y座標は風船の少し上あたり
         const y = rect.top - appRect.top + 20;
         
         el.style.left = `${x}px`;
@@ -758,7 +761,6 @@
       const container = document.getElementById('balloons-container');
       const staffContainer = document.getElementById('staff-container');
       
-      // 1. ミファ(e/f) または シド(b/c) の間（黒鍵のないところ）で自動的に段を分割する
       let rows = [];
       let currentRow = [];
       for (let i = 0; i < stageNotes.length; i++) {
@@ -769,7 +771,6 @@
         const isB = note.id.startsWith('b');
         const remaining = stageNotes.length - 1 - i;
         
-        // 1段に最低4個は入れ、残りも4個以上あるなら分割する
         if ((isE || isB) && currentRow.length >= 4 && remaining >= 4) {
           rows.push(currentRow);
           currentRow = [];
@@ -779,14 +780,12 @@
         rows.push(currentRow);
       }
       
-      // 2. 高い音のグループが画面の上に、低い音のグループが下になるように並び順を反転
       rows.reverse();
       
-      // 3. 段数や数に応じて全体のスケールと出題テキストの位置を調整
       let scale = 1;
-      let staffTop = '20%'; // 出題テキストの基本位置
+      let staffTop = '20%';
       let textScale = 1;
-      let mt = 0; // 段間マージン
+      let mt = 0;
       
       if (rows.length >= 3) {
         scale = 0.45;
@@ -813,7 +812,6 @@
         staffContainer.style.transformOrigin = 'top center';
       }
       
-      // 画面幅をはみ出さないように動的にスケールを再計算
       const maxNotesInRow = Math.max(...rows.map(r => r.length));
       let ml = 0;
       if (maxNotesInRow >= 7) ml = -15;
@@ -824,18 +822,15 @@
       const estimatedWidth = baseWidth + (baseWidth + ml) * (maxNotesInRow - 1);
       const scaledWidth = estimatedWidth * scale;
       
-      // 画面幅の95%に収まるようにスケールを縮小
       if (scaledWidth > containerWidth * 0.95) {
         scale = scale * ((containerWidth * 0.95) / scaledWidth);
       }
       
       const balloonsHtml = rows.map((rowNotes, rowIndex) => {
-
         const rowHtml = rowNotes.map((note, index) => {
           let linesHtml = '';
           let clefHtml = '';
           
-          // その段の最初の音符の背景にだけ、端から端まで伸びる五線とト音記号を描画
           if (index === 0) {
             [50, 75, 100, 125, 150].forEach(y => {
               linesHtml += `<line x1="-3000" y1="${y}" x2="3000" y2="${y}" stroke="#000" stroke-width="3" opacity="0.8" />`;
@@ -843,7 +838,6 @@
             clefHtml = `<text x="-50" y="140" font-size="80" font-family="'Noto Music', 'Segoe UI Symbol', 'Apple Symbols', serif" fill="#000" opacity="0.8">𝄞</text>`;
           }
           
-          // 音符と加線
           let noteHtml = '';
           const ledgerLines = [];
           if (note.y >= 175) ledgerLines.push(175);
@@ -854,7 +848,6 @@
           });
           noteHtml += `<ellipse cx="60" cy="${note.y}" rx="14" ry="10" fill="none" stroke="#000" stroke-width="4" transform="rotate(-15, 60, ${note.y})" />`;
 
-          // 透過用カラー
           const hex = note.color.replace('#', '');
           const r = parseInt(hex.substring(0,2), 16);
           const g = parseInt(hex.substring(2,4), 16);
@@ -897,7 +890,6 @@
           </div>
         `}).join('');
 
-        // 段ごとのコンテナ
         return `
           <div class="w-full flex flex-nowrap justify-center items-end relative shrink-0" style="transform: scale(${scale}); transform-origin: bottom center; margin-top: ${rows.length > 1 && rowIndex > 0 ? mt + 'px' : '0'}; z-index: ${30 - rowIndex};">
             ${rowHtml}
@@ -917,7 +909,6 @@
         if (status === 'playing') {
           b.classList.add('opacity-90', 'pointer-events-auto', 'hover:brightness-125', 'active:scale-95');
         } else if (status === 'intro') {
-          // イントロ中はクリック不可
           b.classList.add('opacity-90', 'pointer-events-none');
         } else {
           b.classList.add('pointer-events-none');
@@ -943,14 +934,13 @@
       
       // スキップ処理
       const skipIntro = (e) => {
-        // ボタン類がクリックされたら無視
         if (e && e.target.closest('button')) return;
         if (state.gameState !== 'intro' || isPaused) return;
         
         if (introTimerId) clearTimeout(introTimerId);
         app.removeEventListener('click', skipIntro);
         
-        // 全てのラベルを強制表示
+        // 全音のラベルを表示させ、同時にすべての音を鳴らす
         targetNotes.forEach(note => {
           const balloon = document.getElementById(`balloon-${note.id}`);
           if (balloon) {
@@ -960,11 +950,12 @@
               label.classList.add('opacity-100', 'scale-100', '-translate-y-2');
             }
           }
+          // ピアノ音と読み上げを発声
+          playNoteAudioAndSpeech(note);
         });
         showStartButton();
       };
       
-      // 最初はスキップイベントを登録
       app.addEventListener('click', skipIntro);
 
       function showStartButton() {
@@ -972,12 +963,11 @@
         startBtnContainer.classList.remove('hidden');
       }
 
-      // スタートボタンを押したときの処理
+      // 【修正】スタートボタンを押した瞬間にBGMを開始
       window.finishIntroFromButton = function() {
         startBtnContainer.classList.add('hidden');
         app.removeEventListener('click', skipIntro);
         
-        // 全てのラベルを隠す
         document.querySelectorAll('.intro-label').forEach(el => {
           el.classList.add('opacity-0', 'scale-90');
           el.classList.remove('opacity-100', 'scale-100', '-translate-y-2');
@@ -986,6 +976,9 @@
         setCatMessage('第1問！');
         state.gameState = 'playing';
         
+        // ★ここでBGMを開始！
+        startBGM();
+
         setTimeout(() => {
           if (state.gameState !== 'playing') return;
           state.currentNote = state.questionList[0];
@@ -1004,11 +997,9 @@
         }, 1000);
       };
 
-      // 順番に音を光らせる処理
       function nextNote() {
         if (state.gameState !== 'intro') return;
         
-        // ポーズ中は待機
         if (isPaused) {
           introTimerId = setTimeout(nextNote, 100);
           return;
@@ -1030,21 +1021,22 @@
           }
           balloon.classList.add('brightness-125');
           
+          // ピアノ音と読み上げ音声を流す
+          playNoteAudioAndSpeech(note);
+
           setTimeout(() => {
             if (balloon) balloon.classList.remove('brightness-125');
           }, 400);
         }
         
         i++;
-        introTimerId = setTimeout(nextNote, 600);
+        introTimerId = setTimeout(nextNote, 800); // 聞き取りやすいよう少し間隔を広げました
       }
 
-      // 少し待ってから最初の音の紹介を開始
       introTimerId = setTimeout(nextNote, 500);
     }
 
     // === ゲームロジック ===
-    
     function generateQuestions(mode, stage) {
       const stageNotesArr = mode === 'range' ? RANGE_STAGES[stage - 1] : CHALLENGE_STAGES[stage - 1];
       const targetNotes = stageNotesArr.map(id => ALL_NOTES[id]);
@@ -1134,7 +1126,7 @@
       state.stage = targetStage;
       state.score = 0;
       state.questionCount = 1;
-      state.gameState = 'intro'; // イントロから開始
+      state.gameState = 'intro';
       state.feedback = null;
       state.showNote = false;
       isPaused = false;
@@ -1152,12 +1144,12 @@
       generateBalloons(targetNotes);
       document.getElementById('staff-container').classList.remove('hidden');
       renderStaffNote(null);
-      startBGM();
+      
+      // 【修正】ここではまだBGMを鳴らさない（stop処理のみ）
+      stopBGM();
 
-      // 初期状態は風船クリック不可
       updateBalloonsState('intro', null);
       
-      // イントロ（音名紹介）を開始
       playIntroSequence(targetNotes);
     }
 
@@ -1246,12 +1238,10 @@
       const clearScore = 8000;
       const superScore = 9000;
       
-      // スコアの更新
       if (state.score > state.scores[state.mode][state.stage - 1]) {
         state.scores[state.mode][state.stage - 1] = state.score;
       }
       
-      // クリア時の解放処理
       if (state.score >= clearScore) {
         if (state.mode === 'challenge') {
           if (state.stage + 1 > state.maxUnlockedChallenge && state.stage < 12) {
