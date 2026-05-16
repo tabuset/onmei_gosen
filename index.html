@@ -940,7 +940,7 @@
         if (introTimerId) clearTimeout(introTimerId);
         app.removeEventListener('click', skipIntro);
         
-        // 全音のラベルを表示させ、同時にすべての音を鳴らす
+        // 【修正】全音のラベルを表示させるだけで、一斉発音（ playNoteAudioAndSpeech ）は行わない
         targetNotes.forEach(note => {
           const balloon = document.getElementById(`balloon-${note.id}`);
           if (balloon) {
@@ -950,8 +950,6 @@
               label.classList.add('opacity-100', 'scale-100', '-translate-y-2');
             }
           }
-          // ピアノ音と読み上げを発声
-          playNoteAudioAndSpeech(note);
         });
         showStartButton();
       };
@@ -963,7 +961,6 @@
         startBtnContainer.classList.remove('hidden');
       }
 
-      // 【修正】スタートボタンを押した瞬間にBGMを開始
       window.finishIntroFromButton = function() {
         startBtnContainer.classList.add('hidden');
         app.removeEventListener('click', skipIntro);
@@ -976,7 +973,6 @@
         setCatMessage('第1問！');
         state.gameState = 'playing';
         
-        // ★ここでBGMを開始！
         startBGM();
 
         setTimeout(() => {
@@ -1021,7 +1017,7 @@
           }
           balloon.classList.add('brightness-125');
           
-          // ピアノ音と読み上げ音声を流す
+          // 1音ずつの自動紹介のときは、ピアノ音と読み上げ音声を流す
           playNoteAudioAndSpeech(note);
 
           setTimeout(() => {
@@ -1030,7 +1026,7 @@
         }
         
         i++;
-        introTimerId = setTimeout(nextNote, 800); // 聞き取りやすいよう少し間隔を広げました
+        introTimerId = setTimeout(nextNote, 800);
       }
 
       introTimerId = setTimeout(nextNote, 500);
@@ -1145,7 +1141,6 @@
       document.getElementById('staff-container').classList.remove('hidden');
       renderStaffNote(null);
       
-      // 【修正】ここではまだBGMを鳴らさない（stop処理のみ）
       stopBGM();
 
       updateBalloonsState('intro', null);
