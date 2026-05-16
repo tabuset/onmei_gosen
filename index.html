@@ -36,6 +36,19 @@
     }
     .animate-confetti { animation: confetti linear infinite; }
 
+    /* 下から上にジャンプするネコ用アニメーション */
+    @keyframes catBounce {
+      0%, 100% {
+        transform: translateY(0);
+        animation-timing-function: cubic-bezier(0, 0, 0.2, 1); /* 上に向かって減速 */
+      }
+      50% {
+        transform: translateY(-20px);
+        animation-timing-function: cubic-bezier(0.8, 0, 1, 1); /* 下に向かって加速 */
+      }
+    }
+    .animate-catBounce { animation: catBounce 0.5s infinite; }
+
     /* タイトルの縁取り用 */
     .stroke-text {
       -webkit-text-stroke: 2px #1e3a8a; /* blue-900 */
@@ -145,7 +158,7 @@
       <button onclick="clearData()" class="absolute bottom-4 right-4 text-xs text-blue-800 hover:text-red-600 underline bg-transparent border-none z-50 cursor-pointer">データクリア</button>
 
       <div class="flex items-center justify-center gap-2 mb-10 shrink-0 mt-16">
-        <div class="transform -rotate-6 animate-bounce">
+        <div class="transform -rotate-6 animate-catBounce">
           <svg width="80" height="96" viewBox="0 0 120 150">
             <path d="M 20 100 Q 0 120 10 140 Q 20 150 30 130 Q 40 110 30 90" fill="#FF8C00" stroke="#000" stroke-width="2"/>
             <ellipse cx="60" cy="100" rx="30" ry="40" fill="#FF8C00" stroke="#000" stroke-width="2" transform="rotate(-15, 60, 100)" />
@@ -217,7 +230,7 @@
 
     <div id="overlay-allclear" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#fff0f5] hidden overflow-hidden">
        <div id="allclear-confetti" class="absolute inset-0 pointer-events-none z-0"></div>
-       <div class="text-5xl md:text-6xl font-black text-pink-500 mb-8 animate-bounce drop-shadow-md z-10 text-center">完全クリア！！</div>
+       <div class="text-5xl md:text-6xl font-black text-pink-500 mb-8 animate-catBounce drop-shadow-md z-10 text-center">完全クリア！！</div>
        <div class="text-2xl font-bold text-gray-800 mb-10 z-10 bg-white/80 px-6 py-3 rounded-full shadow-sm">あなたは真の音符マスターです！</div>
        <button class="py-4 px-12 bg-pink-500 hover:bg-pink-400 text-white text-2xl font-bold rounded-full shadow-[0_6px_0_#be185d] active:translate-y-[6px] active:shadow-none transition-all z-10" onclick="showTitleScreen()">
           タイトルへ戻る
@@ -570,12 +583,10 @@
       osc.stop(audioCtx.currentTime + 0.5);
     }
 
-    // ピアノ音と読み上げを鳴らす共通処理
     function playNoteAudioAndSpeech(note) {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
 
-      // 1. 読み上げ音声 (日本語)
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(note.label + 'ー');
@@ -585,7 +596,6 @@
         window.speechSynthesis.speak(utterance);
       }
 
-      // 2. ピアノの単音風サウンド（サイン波）
       const oscNote = audioCtx.createOscillator();
       const gainNote = audioCtx.createGain();
       oscNote.type = 'sine';
@@ -602,10 +612,8 @@
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
       
-      // 読み上げとピアノ音
       playNoteAudioAndSpeech(note);
 
-      // 正解時のピコーンというコイン音を追加
       const oscCoin = audioCtx.createOscillator();
       const gainCoin = audioCtx.createGain();
       oscCoin.type = 'square';
@@ -700,11 +708,11 @@
       document.getElementById('ui-cat-message').innerHTML = text.replace(/\n/g, '<br/>');
       const catSvg = document.getElementById('cat-svg');
       if (isCorrect) {
-        catSvg.classList.remove('animate-bounce');
+        catSvg.classList.remove('animate-catBounce');
         void catSvg.offsetWidth;
-        catSvg.classList.add('animate-bounce');
+        catSvg.classList.add('animate-catBounce');
       } else {
-        catSvg.classList.remove('animate-bounce');
+        catSvg.classList.remove('animate-catBounce');
       }
       updateCatFace(isWrong);
     }
@@ -932,7 +940,6 @@
       const app = document.getElementById('game-app');
       const startBtnContainer = document.getElementById('intro-start-container');
       
-      // スキップ処理
       const skipIntro = (e) => {
         if (e && e.target.closest('button')) return;
         if (state.gameState !== 'intro' || isPaused) return;
@@ -940,7 +947,6 @@
         if (introTimerId) clearTimeout(introTimerId);
         app.removeEventListener('click', skipIntro);
         
-        // 【修正】全音のラベルを表示させるだけで、一斉発音（ playNoteAudioAndSpeech ）は行わない
         targetNotes.forEach(note => {
           const balloon = document.getElementById(`balloon-${note.id}`);
           if (balloon) {
@@ -1017,7 +1023,6 @@
           }
           balloon.classList.add('brightness-125');
           
-          // 1音ずつの自動紹介のときは、ピアノ音と読み上げ音声を流す
           playNoteAudioAndSpeech(note);
 
           setTimeout(() => {
